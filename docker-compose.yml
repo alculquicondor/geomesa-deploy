@@ -50,10 +50,6 @@ services:
             - zookeeper
         volumes:
             - ./osm:/opt/data/
-        deploy:
-            placement:
-                constraints:
-                    - node.labels.role == master
 
     accumulomonitor:
         image: quay.io/geomesa/accumulo-geomesa:geomesa-1.3.2-accumulo-1.8.1
@@ -67,6 +63,10 @@ services:
         depends_on:
             - zookeeper
             - accumulomaster
+        deploy:
+            placement:
+                constraints:
+                    - node.labels.role == master
 
     accumulotserver:
         image: quay.io/geomesa/accumulo-geomesa:geomesa-1.3.2-accumulo-1.8.1
