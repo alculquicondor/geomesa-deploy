@@ -1,0 +1,100 @@
+version: '3.3'
+
+
+services:
+    hdfsname:
+        image: quay.io/geomesa/hdfs:geomesa-1.3.2-accumulo-1.8.1
+        hostname: hdfsname
+        command: name
+        environment:
+            - HADOOP_MASTER_ADDRESS=hdfsname
+        ports:
+            - 50070:50070
+        volumes:
+            - hdfsname:/data/hdfs
+        deploy:
+            placement:
+                constraints:
+                    - node.labels.role == master
+
+    hdfsdata:
+        image: quay.io/geomesa/hdfs:geomesa-1.3.2-accumulo-1.8.1
+        command: data
+        depends_on:
+            - hdfsname
+        environment:
+            - HADOOP_MASTER_ADDRESS=hdfsname
+        volumes:
+            - hdfsdata:/data/hdfs
+        deploy:
+            mode: global
+            endpoint_mode: dnsrr
+
+    zookeeper:
+        image: zookeeper:3.3
+        hostname: zookeeper
+        ports:
+            - 2181:2181
+        volumes:
+            - zookeeper:/data
+        restart: unless-stopped
+
+    accumulomaster:
+        image: quay.io/geomesa/accumulo-geomesa:geomesa-1.3.2-accumulo-1.8.1
+        command: master --auto-init
+        environment:
+            HADOOP_MASTER_ADDRESS: hdfsname
+            ZOOKEEPERS: zookeeper
+            ACCUMULO_PASSWORD: IAccumulateMesas
+        depends_on:
+            - zookeeper
+        volumes:
+            - ./osm:/opt/data/
+        deploy:
+            placement:
+                constraints:
+                    - node.labels.role == master
+
+    accumulomonitor:
+        image: quay.io/geomesa/accumulo-geomesa:geomesa-1.3.2-accumulo-1.8.1
+        command: monitor
+        environment:
+            HADOOP_MASTER_ADDRESS: hdfsname
+            ZOOKEEPERS: zookeeper
+        ports:
+            - 9995:9995
+            - 50095:50095
+        depends_on:
+            - zookeeper
+            - accumulomaster
+
+    accumulotserver:
+        image: quay.io/geomesa/accumulo-geomesa:geomesa-1.3.2-accumulo-1.8.1
+        command: tserver
+        environment:
+            HADOOP_MASTER_ADDRESS: hdfsname
+            ZOOKEEPERS: zookeeper
+        depends_on:
+            - zookeeper
+            - accumulomaster
+        deploy:
+            mode: global
+            endpoint_mode: dnsrr
+
+    geoserver:
+        image: quay.io/geomesa/geoserver:geomesa-1.3.2-accumulo-1.8.1
+        ports:
+            - 9090:9090
+        deploy:
+            placement:
+                constraints:
+                    - node.hostname == aldorithm
+        deploy:
+            placement:
+                constraints:
+                    - node.labels.role == master
+
+volumes:
+    hdfsname:
+    hdfsdata:
+    zookeeper:
