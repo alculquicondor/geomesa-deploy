@@ -3,67 +3,99 @@ version: '3.4'
 
 services:
     hdfsname:
-        image: quay.io/geomesa/hdfs:geomesa-1.3.2-accumulo-1.8.1
+        image: uhopper/hadoop-namenode:2.8.1
         hostname: hdfsname
-        command: name
-        environment:
-            - HADOOP_MASTER_ADDRESS=hdfsname
-        ports:
-            - 50070:50070
         volumes:
-            - hdfsname:/data/hdfs
+            - hdfsname:/hadoop/dfs/name
+        ports:
+            - "50070:50070"  # webui
+        environment:
+            - CLUSTER_NAME=ucsp
         deploy:
             placement:
                 constraints:
                     - node.role == manager
 
     hdfsdata1:
-        image: quay.io/geomesa/hdfs:geomesa-1.3.2-accumulo-1.8.1
-        command: data
+        image: uhopper/hadoop-datanode:2.8.1
         depends_on:
             - hdfsname
-        environment:
-            - HADOOP_MASTER_ADDRESS=hdfsname
         volumes:
-            - hdfsdata1:/data/hdfs
+            - hdfsdata1:/hadoop/dfs/data
+        environment:
+            - CORE_CONF_fs_defaultFS=hdfs://hdfsname:8020
         deploy:
             placement:
                 constraints:
                     - node.labels.hdfs == 1
 
     hdfsdata2:
-        image: quay.io/geomesa/hdfs:geomesa-1.3.2-accumulo-1.8.1
-        command: data
+        image: uhopper/hadoop-datanode:2.8.1
         depends_on:
             - hdfsname
-        environment:
-            - HADOOP_MASTER_ADDRESS=hdfsname
         volumes:
-            - hdfsdata2:/data/hdfs
+            - hdfsdata2:/hadoop/dfs/data
+        environment:
+            - CORE_CONF_fs_defaultFS=hdfs://hdfsname:8020
         deploy:
             placement:
                 constraints:
                     - node.labels.hdfs == 2
 
     hdfsdata3:
-        image: quay.io/geomesa/hdfs:geomesa-1.3.2-accumulo-1.8.1
-        command: data
+        image: uhopper/hadoop-datanode:2.8.1
         depends_on:
             - hdfsname
-        environment:
-            - HADOOP_MASTER_ADDRESS=hdfsname
         volumes:
-            - hdfsdata3:/data/hdfs
+            - hdfsdata3:/hadoop/dfs/data
+        environment:
+            - CORE_CONF_fs_defaultFS=hdfs://hdfsname:8020
         deploy:
             placement:
                 constraints:
                     - node.labels.hdfs == 3
 
+    yarnresourcemanager:
+        image: uhopper/hadoop-resourcemanager:2.8.1
+        depends_on:
+            - hdfsname
+        ports:
+            - "8088:8088"
+        environment:
+            - CORE_CONF_fs_defaultFS=hdfs://hdfsname:8020
+        deploy:
+            placement:
+                constraints:
+                    - node.role == manager
+
+    yarnnodemanager:
+        image: uhopper/hadoop-nodemanager:2.8.1
+        depends_on:
+            - hdfsname
+            - yarnresourcemanager
+        environment:
+            - CORE_CONF_fs_defaultFS=hdfs://hdfsnamenode:8020
+            - YARN_CONF_yarn_resourcemanager_hostname=yarnresourcemanager
+
+    runner:
+        image: uhopper/hadoop-spark:2.0.2_2.8.1
+        volumes:
+            - "./spark:/root/spark"
+        depends_on:
+            - hdfsname
+            - yarnresourcemanager
+        environment:
+            - CORE_CONF_fs_defaultFS=hdfs://hdfsnamenode:8020
+            - YARN_CONF_yarn_resourcemanager_hostname=yarnresourcemanager
+        command: tail -f /var/log/dmesg
+        deploy:
+            placement:
+                constraints:
+                    - node.role == manager
+
     zookeeper:
         image: zookeeper:3.3
         hostname: zookeeper
-        ports:
-            - 2181:2181
         volumes:
             - zookeeper:/data
         deploy:
@@ -80,6 +112,9 @@ services:
             ACCUMULO_PASSWORD: IAccumulateMesas
         depends_on:
             - zookeeper
+            - hdfsname
+        volumes:
+            - "./osm:/root/data"
         deploy:
             placement:
                 constraints:
@@ -96,6 +131,7 @@ services:
             - 50095:50095
         depends_on:
             - zookeeper
+            - hdfsname
             - accumulomaster
         deploy:
             placement:
@@ -110,6 +146,7 @@ services:
             ZOOKEEPERS: zookeeper
         depends_on:
             - zookeeper
+            - hdfsname
             - accumulomaster
         deploy:
             mode: global
@@ -118,45 +155,45 @@ services:
                 constraints:
                     - node.labels.geoserver != true
 
-    geoserver:
-        image: quay.io/geomesa/geoserver:geomesa-1.3.2-accumulo-1.8.1
-        ports:
-            - 9090:9090
-        volumes:
-            - geoserver:/opt/tomcat/webapps/geoserver/data
-        deploy:
-            placement:
-                constraints:
-                    - node.labels.geoserver == true
+#    geoserver:
+#        image: quay.io/geomesa/geoserver:geomesa-1.3.2-accumulo-1.8.1
+#        ports:
+#            - 9090:9090
+#        volumes:
+#            - geoserver:/opt/tomcat/webapps/geoserver/data
+#        deploy:
+#            placement:
+#                constraints:
+#                    - node.labels.geoserver == true
 
 volumes:
     hdfsname:
-        driver: cloudstor:aws
-        driver_opts:
-            backing: relocatable
-            size: 1
+#        driver: cloudstor:aws
+#        driver_opts:
+#            backing: relocatable
+#            size: 1
     hdfsdata1:
-        driver: cloudstor:aws
-        driver_opts:
-            backing: relocatable
-            size: 20
+#        driver: cloudstor:aws
+#        driver_opts:
+#            backing: relocatable
+#            size: 20
     hdfsdata2:
-        driver: cloudstor:aws
-        driver_opts:
-            backing: relocatable
-            size: 20
+#        driver: cloudstor:aws
+#        driver_opts:
+#            backing: relocatable
+#            size: 20
     hdfsdata3:
-        driver: cloudstor:aws
-        driver_opts:
-            backing: relocatable
-            size: 20
+#        driver: cloudstor:aws
+#        driver_opts:
+#            backing: relocatable
+#            size: 20
     zookeeper:
-        driver: cloudstor:aws
-        driver_opts:
-            backing: relocatable
-            size: 1
+#        driver: cloudstor:aws
+#        driver_opts:
+#            backing: relocatable
+#            size: 1
     geoserver:
-        driver: cloudstor:aws
-        driver_opts:
-            backing: relocatable
-            size: 1
+#        driver: cloudstor:aws
+#        driver_opts:
+#            backing: relocatable
+#            size: 1
